@@ -1,0 +1,101 @@
+---
+title: "PML"
+author: "Sangjin Park"
+date: "2015년 11월 21일"
+output: html_document
+---
+# Practice Machine Learning
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+# Load the data
+load the data and make NA for NA, #DIV/0!, "".
+```{r}
+datarow <- read.csv(file = "pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+datatest <- read.csv(file = "pml-testing.csv",na.strings=c("NA","#DIV/0!",""))
+```
+
+# Clean the data
+remove the columns of NAs.
+```{r}
+data <- datarow[,colSums(is.na(datarow)) == 0]
+test <- datatest[,colSums(is.na(datatest)) == 0]
+names(data)
+```
+
+remove variables which isn't necessity for predicting the model.
+```{r}
+data <- data[,-(1:7)]
+test <- test[,-(1:7)]
+```
+So, I have 53 variables for fitting the model.
+
+#Creating Training and Validation data sets 
+For Cross validation, divide the data to training and validation data sets.
+I split the data from the pml-training.csv file into 2 subsets : training data(70%) and testing data(70%).
+```{r}
+library(caret)
+set.seed(333)  ## set.seed for reproducibility
+inTrain <- createDataPartition(y=data$classe, p=0.7, list=FALSE)
+training <- data[inTrain,] ; validation <- data[-inTrain,]
+dim(training)
+dim(validation)
+```
+
+# Build model
+
+Predicting with Tree 
+```{r}
+modtree <- train(classe ~ ., method = "rpart", data=training)
+print(modtree$finalModel)
+plot(modtree$finalModel, uniform = TRUE, main = "Classification Tree")
+text(modtree$finalModel, use.n = TRUE, all = TRUE, cex=.8 )
+library(rattle)
+fancyRpartPlot(modtree$finalModel)
+```
+I can see important variables by predicting with tree as order by roll_belt, pitch_forearm, 
+magnet_dumbbell_y, roll_forearm.
+
+# Random Forest
+```{r}
+modrf <- train(classe ~ ., method = "rf", 
+               data=training, trControl = trainControl(method = "cv"), number=5)
+modrf$finalModel
+```
+The modrf model has an estimate the OOB(overall out-of-bag) error rate of 0.68%.
+It is qulite good.
+
+# Validate Performance
+```{r}
+prerf <- predict(modrf, validation)
+confusionMatrix(validation$classe, prerf)
+```
+The results shows that the fitted model has an accurary of 99.44% (out of sample error is then 0.54%).
+It is very good rate of generalization.
+
+# Predict test data set
+```{r}
+pretest <- predict(modrf, test)
+pretest 
+```
+The 20 samples from the test datasets are classified.
+
+# Submission
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(pretest)
+```
+
